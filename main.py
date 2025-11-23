@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-
+from passlib.context import CryptContext
 
 app = FastAPI()
 
