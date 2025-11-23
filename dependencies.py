@@ -1,11 +1,12 @@
 from sqlalchemy.orm import sessionmaker
-from models import db
+from models import db  # seu engine SQLAlchemy
+
+# Cria o factory de sessão
+SessionLocal = sessionmaker(bind=db, autoflush=False, autocommit=False)
 
 def pegar_sessao():
+    session = SessionLocal()  # cria uma instância da sessão
     try:
-      Session = sessionmaker(bind=db)
-      session = Session()
-      yield session
+        yield session          # devolve a sessão para uso nas rotas
     finally:
-      #fecha a sessao
-      Session.close()
+        session.close()        # fecha a sessão corretamente
