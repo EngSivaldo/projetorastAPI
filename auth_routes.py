@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException
-from sqlalchemy.orm import sessionmaker
-from passlib.hash import bcrypt
-from models import Usuario, db
-
+from fastapi import APIRouter, HTTPException,Depends
+from models import Usuario
+from security import gerar_hash, verificar_senha, criar_token
+from dependencies import pegar_sessao
 #criar roteador
 auth_router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -13,39 +12,43 @@ async def home():
   """
   return {"mensagem": "voce acessou a rota de padrão de autenticação", "autenticado":False}
 
-
+# criar usuário
 @auth_router.post("/criar_conta")
-async def criar_conta(nome: str, email: str, senha: str):
-    # Criar sessão
-    SessionLocal = sessionmaker(bind=db)
-    session = SessionLocal()
+async def criar_conta(nome: str, email: str, senha: str, session= Depends(pegar_sessao)):
+    # Session = sessionmaker(bind=db)
+    # session = Session()
 
-    # Verificar se já existe usuário com email
+    # verifica email duplicado
     if session.query(Usuario).filter(Usuario.email == email).first():
         raise HTTPException(status_code=400, detail="Email já cadastrado")
 
-    # Criar hash da senha
-    senha_hash = bcrypt.hash(senha)
-
-    # Criar usuário
-    novo_usuario = Usuario(
+    usuario = Usuario(
         nome=nome,
         email=email,
-        senha=senha_hash,
-        ativo=True,
-        admin=False,
+        senha=gerar_hash(senha)
     )
 
-    # Salvar no banco
-    session.add(novo_usuario)
+    session.add(usuario)
     session.commit()
+    session.refresh(usuario)
 
-    # Atualizar objeto após commit
-    session.refresh(novo_usuario)
+    return {"mensagem": "Usuário criado com sucesso!", "usuario_id": usuario.id}
 
-    return {
-        "mensagem": "Conta criada com sucesso",
-        "id": novo_usuario.id,
-        "nome": novo_usuario.nome,
-        "email": novo_usuario.email
-    }
+
+# login
+@auth_router.post("/login")
+async def login(email: str, senha: str):
+    Session = sessionmaker(bind=db)
+    session = Session()
+
+    usuario = session.query(Usuario).filter(Usuario.email == email).first()
+
+    if not usuario:
+        raise HTTPException(status_code=400, detail="Usuário não encontrado")
+
+    if not verificar_senha(senha, usuario.senha):
+        raise HTTPException(status_code=400, detail="Senha incorreta")
+
+    token = criar_token({"usuario_id": usuario.id, "email": usuario.email})
+
+    return {"access_token": token, "token_type": "bearer"}
